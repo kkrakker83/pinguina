@@ -25,15 +25,7 @@
     const W = canvas.width, H = canvas.height;
 
     // --- Personaje ---
-    const llipsia = {
-      x: 50,
-      y: H / 2,
-      w: 40,
-      h: 50,
-      dy: 0,
-      gravity: 0.5,
-      jumpForce: -8
-    };
+    const llipsia = { x: 50, y: H / 2, w: 40, h: 50, dy: 0, gravity: 0.5, jumpForce: -8 };
 
     // --- Obstáculos ---
     let obstáculos = [];
@@ -42,23 +34,37 @@
     let últimoSpawn = 0;
 
     // --- Estado del juego ---
-    let gameOver = false;
-    let score = 0;
+    let gameOver = false, score = 0;
 
-    // --- Carga de imágenes ---
-    const assetsToLoad = 3;
-    let assetsLoaded = 0;
-    function assetLoaded() {
-      assetsLoaded++;
-      if (assetsLoaded === assetsToLoad) {
-        document.getElementById('info').textContent = 'Presiona [ESPACIO] para volar';
-        resetGame();
-      }
+    // --- Sprites y carga ---
+    const assets = {
+      llipsia: { img: new Image(), loaded: false },
+      obst:    { img: new Image(), loaded: false },
+      obstTop: { img: new Image(), loaded: false }
+    };
+    let assetsToLoad = 3, assetsLoaded = 0;
+    function onAssetLoad(key) {
+      return function() {
+        assets[key].loaded = true;
+        assetsLoaded++;
+        if (assetsLoaded === assetsToLoad) {
+          document.getElementById('info').textContent = 'Presiona [ESPACIO] para volar';
+          resetGame();
+        }
+      };
     }
+    // Configuración de sprites
+    assets.llipsia.img.onload = onAssetLoad('llipsia');
+    assets.llipsia.img.onerror = onAssetLoad('llipsia');
+    assets.llipsia.img.src = 'assets/llipsia.png';
 
-    const imgLlipsia = new Image(); imgLlipsia.onload = assetLoaded; imgLlipsia.onerror = assetLoaded; imgLlipsia.src = 'assets/llipsia.png';
-    const imgObst =   new Image(); imgObst.onload   = assetLoaded; imgObst.onerror   = assetLoaded; imgObst.src   = 'assets/obstaculo.png';
-    const imgObstTop =new Image(); imgObstTop.onload= assetLoaded; imgObstTop.onerror= assetLoaded; imgObstTop.src= 'assets/obstaculo1.png';
+    assets.obst.img.onload = onAssetLoad('obst');
+    assets.obst.img.onerror = onAssetLoad('obst');
+    assets.obst.img.src = 'assets/obstaculo.png';
+
+    assets.obstTop.img.onload = onAssetLoad('obstTop');
+    assets.obstTop.img.onerror = onAssetLoad('obstTop');
+    assets.obstTop.img.src = 'assets/obstaculo1.png';
 
     // --- Control de teclado ---
     document.addEventListener('keydown', e => {
@@ -84,10 +90,7 @@
 
     // --- Bucle principal ---
     function loop(ts) {
-      if (gameOver) {
-        drawGameOver();
-        return;
-      }
+      if (gameOver) { drawGameOver(); return; }
 
       // Física de vuelo
       llipsia.dy += llipsia.gravity;
@@ -104,33 +107,28 @@
         llipsia.dy = 0;
       }
 
-      // Spawn de obstáculos (suelo y techo)
+      // Spawn de obstáculos
       if (ts - últimoSpawn >= spawnInterval) {
         const sizeW = 30 + Math.random() * 30;
         const sizeH = 30 + Math.random() * 30;
-        // Suelo
         obstáculos.push({ x: W, y: H - sizeH, w: sizeW, h: sizeH, isRoof: false });
-        // Techo
-        obstáculos.push({ x: W, y: 0,           w: sizeW, h: sizeH, isRoof: true  });
+        obstáculos.push({ x: W, y: 0,          w: sizeW, h: sizeH, isRoof: true  });
         últimoSpawn = ts;
       }
 
-      // Mover y colisiones
+      // Actualizar obstáculos
       for (let i = obstáculos.length - 1; i >= 0; i--) {
         const o = obstáculos[i];
         o.x -= obstVel;
+        // Colisión
         if (
           llipsia.x < o.x + o.w &&
           llipsia.x + llipsia.w > o.x &&
           llipsia.y < o.y + o.h &&
           llipsia.y + llipsia.h > o.y
-        ) {
-          gameOver = true;
-        }
-        if (o.x + o.w < 0) {
-          obstáculos.splice(i, 1);
-          if (!gameOver) score++;
-        }
+        ) { gameOver = true; }
+        // Fuera de pantalla
+        if (o.x + o.w < 0) { obstáculos.splice(i, 1); if (!gameOver) score++; }
       }
 
       // Render
@@ -152,27 +150,35 @@
       ctx.fillText('Llipsia', W / 2, H / 2);
       ctx.restore();
     }
+
     function drawLlipsia() {
-      ctx.drawImage(imgLlipsia, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      if (assets.llipsia.loaded && assets.llipsia.img.naturalWidth) {
+        ctx.drawImage(assets.llipsia.img, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      } else {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      }
     }
+
     function drawObstáculos() {
       obstáculos.forEach(o => {
-        // Fondo bloque
+        // Dibujo base
         ctx.fillStyle = '#c33';
         ctx.fillRect(o.x, o.y, o.w, o.h);
-        // Sprite encima
-        if (o.isRoof) {
-          if (imgObstTop.complete && imgObstTop.naturalWidth) ctx.drawImage(imgObstTop, o.x, o.y, o.w, o.h);
-        } else {
-          if (imgObst.complete && imgObst.naturalWidth) ctx.drawImage(imgObst, o.x, o.y, o.w, o.h);
+        // Sprite encima si cargó
+        const sprite = o.isRoof ? assets.obstTop : assets.obst;
+        if (sprite.loaded && sprite.img.naturalWidth) {
+          ctx.drawImage(sprite.img, o.x, o.y, o.w, o.h);
         }
       });
     }
+
     function drawScore() {
       ctx.fillStyle = '#fff';
       ctx.font = '20px sans-serif';
       ctx.fillText('Score: ' + score, 10, 25);
     }
+
     function drawGameOver() {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
       ctx.fillRect(0, 0, W, H);
@@ -187,4 +193,3 @@
   </script>
 </body>
 </html>
-
