@@ -5,7 +5,7 @@
   <title>Llipsia la Pingüina</title>
   <style>
     body { margin: 0; overflow: hidden; background: #222; }
-    canvas { display: block; margin: auto; background: #87ceeb; }
+    canvas { display: block; margin: auto; background: #87ceeb; touch-action: none; }
     #info {
       position: absolute;
       top: 10px;
@@ -13,6 +13,7 @@
       transform: translateX(-50%);
       color: #fff;
       font-family: sans-serif;
+      user-select: none;
     }
   </style>
 </head>
@@ -48,12 +49,12 @@
         assets[key].loaded = true;
         assetsLoaded++;
         if (assetsLoaded === assetsToLoad) {
-          document.getElementById('info').textContent = 'Presiona [ESPACIO] para volar';
+          document.getElementById('info').textContent = 'Toca la pantalla o presiona [ESPACIO] para volar';
           resetGame();
         }
       };
     }
-    // Configuración de sprites
+    // Configurar sprites
     assets.llipsia.img.onload = onAssetLoad('llipsia');
     assets.llipsia.img.onerror = onAssetLoad('llipsia');
     assets.llipsia.img.src = 'assets/llipsia.png';
@@ -66,16 +67,19 @@
     assets.obstTop.img.onerror = onAssetLoad('obstTop');
     assets.obstTop.img.src = 'assets/obstaculo1.png';
 
-    // --- Control de teclado ---
-    document.addEventListener('keydown', e => {
-      if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) {
-        if (!gameOver) {
-          llipsia.dy = llipsia.jumpForce;
-        } else {
-          resetGame();
-        }
+    // --- Controles ---
+    function handleFly() {
+      if (!gameOver) {
+        llipsia.dy = llipsia.jumpForce;
+      } else {
+        resetGame();
       }
+    }
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' || e.key === ' ' || e.keyCode === 32) handleFly();
     });
+    canvas.addEventListener('touchstart', e => { e.preventDefault(); handleFly(); });
+    canvas.addEventListener('mousedown', e => { e.preventDefault(); handleFly(); });
 
     // --- Reiniciar juego ---
     function resetGame() {
@@ -162,10 +166,8 @@
 
     function drawObstáculos() {
       obstáculos.forEach(o => {
-        // Dibujo base
         ctx.fillStyle = '#c33';
         ctx.fillRect(o.x, o.y, o.w, o.h);
-        // Sprite encima si cargó
         const sprite = o.isRoof ? assets.obstTop : assets.obst;
         if (sprite.loaded && sprite.img.naturalWidth) {
           ctx.drawImage(sprite.img, o.x, o.y, o.w, o.h);
@@ -188,7 +190,7 @@
       ctx.fillText('¡Game Over!', W / 2, H / 2 - 20);
       ctx.font = '20px sans-serif';
       ctx.fillText('Score: ' + score, W / 2, H / 2 + 10);
-      ctx.fillText('Presiona [ESPACIO] para reiniciar', W / 2, H / 2 + 50);
+      ctx.fillText('Toca la pantalla o presiona [ESPACIO] para reiniciar', W / 2, H / 2 + 50);
     }
   </script>
 </body>
