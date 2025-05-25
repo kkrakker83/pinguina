@@ -3,24 +3,16 @@
 <head>
   <meta charset="UTF-8">
   <title>Llipsia la Pingüina</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <style>
     html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#222; }
-    #touchArea {
-      position:absolute;
-      top:0;
-      left:0;
-      width:100vw;
-      height:100vh;
-      z-index:10;
-      touch-action:none;
-    }
     canvas {
-      position:absolute;
-      top:0;
-      left:0;
-      z-index:1;
-      background:#87ceeb;
+      display:block;
+      width:100%;
+      height:100%;
+      touch-action:none;
+      -webkit-user-select:none;
+      user-select:none;
     }
     #info {
       position:absolute;
@@ -29,46 +21,50 @@
       transform:translateX(-50%);
       color:#fff;
       font-family:sans-serif;
-      z-index:20;
       pointer-events:none;
+      user-select:none;
+      z-index:10;
     }
   </style>
 </head>
 <body>
   <div id="info">Cargando...</div>
-  <div id="touchArea"></div>
   <canvas id="gameCanvas"></canvas>
   <script>
-    // Set canvas to full window size
+    // Ajusta canvas al tamaño de la ventana
     const canvas = document.getElementById('gameCanvas');
     const ctx = canvas.getContext('2d');
     function resize() {
-      canvas.width = window.innerWidth;
+      canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
     }
     window.addEventListener('resize', resize);
     resize();
-    const W = canvas.width, H = canvas.height;
 
-    // Player
+    let W = canvas.width,
+        H = canvas.height;
+
+    // Jugador
     const llipsia = { x: 50, y: H/2, w: 40, h: 50, dy: 0, gravity: 0.5, jumpForce: -8 };
-    let obstáculos = [];
-    const spawnInterval = 1500, obstVel = 4;
-    let últimoSpawn = 0, gameOver = false, score = 0;
+    let obstáculos = [],
+        spawnInterval = 1500,
+        obstVel = 4,
+        últimoSpawn = 0;
+    let gameOver = false,
+        score = 0;
 
-    // Load images
+    // Carga de sprites
     const assets = {
       llipsia: { img: new Image(), ok: false },
       obst:    { img: new Image(), ok: false },
       obstTop: { img: new Image(), ok: false }
     };
-    let loadedCount = 0;
-    function mark(key) {
+    let loaded = 0;
+    function mark(k) {
       return function() {
-        assets[key].ok = true;
-        loadedCount++;
-        if (loadedCount === 3) {
-          document.getElementById('info').textContent = 'Toca o haz clic para volar';
+        assets[k].ok = true;
+        if (++loaded === 3) {
+          document.getElementById('info').textContent = 'Toca o hace clic para volar';
           resetGame();
         }
       };
@@ -80,23 +76,19 @@
     assets.obstTop.img.onload = assets.obstTop.img.onerror = mark('obstTop');
     assets.obstTop.img.src    = 'assets/obstaculo1.png';
 
-    // Fly function
+    // Impulso (vuelo / salto)
     function fly() {
       if (!gameOver) llipsia.dy = llipsia.jumpForce;
       else resetGame();
     }
 
-    // Touch area listeners
-    const touchArea = document.getElementById('touchArea');
-    ['touchstart','mousedown','pointerdown'].forEach(evt => {
-      touchArea.addEventListener(evt, function(e) {
-        e.preventDefault();
-        fly();
-      }, { passive: false });
-    });
+    // Listeners globales para touch y click
+    window.addEventListener('touchstart', e => { e.preventDefault(); fly(); }, { passive:false });
+    window.addEventListener('mousedown', fly);
+    window.addEventListener('pointerdown', fly);
     document.addEventListener('keydown', e => { if (e.code === 'Space') fly(); });
 
-    // Reset game
+    // Reiniciar partida
     function resetGame() {
       obstáculos = [];
       llipsia.y = H/2;
@@ -107,32 +99,42 @@
       requestAnimationFrame(loop);
     }
 
-    // Main loop
+    // Bucle principal
     function loop(ts) {
       if (gameOver) return drawGameOver();
-      // Physics
+      // Actualiza dimensiones (en caso de rotate)
+      W = canvas.width;
+      H = canvas.height;
+
+      // Física
       llipsia.dy += llipsia.gravity;
       llipsia.y += llipsia.dy;
       if (llipsia.y + llipsia.h > H) { llipsia.y = H - llipsia.h; gameOver = true; }
-      if (llipsia.y < 0) { llipsia.y = 0; llipsia.dy = 0; }
-      // Spawn obstacles
+      if (llipsia.y < 0)      { llipsia.y = 0; llipsia.dy = 0; }
+
+      // Spawning
       if (ts - últimoSpawn >= spawnInterval) {
-        const w = 30 + Math.random()*30;
-        const h = 30 + Math.random()*30;
+        const w = 30 + Math.random()*30,
+              h = 30 + Math.random()*30;
         obstáculos.push({ x: W, y: H - h, w, h, roof: false });
-        obstáculos.push({ x: W, y: 0,      w, h, roof: true  });
+        obstáculos.push({ x: W, y: 0,     w, h, roof: true  });
         últimoSpawn = ts;
       }
-      // Update obstacles
+
+      // Mover obstáculos y colisiones
       for (let i = obstáculos.length - 1; i >= 0; i--) {
         const o = obstáculos[i];
         o.x -= obstVel;
-        if (llipsia.x < o.x + o.w && llipsia.x + llipsia.w > o.x && llipsia.y < o.y + o.h && llipsia.y + llipsia.h > o.y) {
+        if ( llipsia.x < o.x + o.w && llipsia.x + llipsia.w > o.x && llipsia.y < o.y + o.h && llipsia.y + llipsia.h > o.y ) {
           gameOver = true;
         }
-        if (o.x + o.w < 0) { obstáculos.splice(i,1); if (!gameOver) score++; }
+        if (o.x + o.w < 0) {
+          obstáculos.splice(i, 1);
+          if (!gameOver) score++;
+        }
       }
-      // Draw
+
+      // Dibuja todo
       ctx.clearRect(0,0,W,H);
       drawBackground();
       drawLlipsia();
@@ -141,7 +143,7 @@
       requestAnimationFrame(loop);
     }
 
-    // Drawing functions
+    // Funciones de dibujo
     function drawBackground() {
       ctx.save();
       ctx.globalAlpha = 0.1;
@@ -153,7 +155,10 @@
     }
     function drawLlipsia() {
       if (assets.llipsia.ok) ctx.drawImage(assets.llipsia.img, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
-      else { ctx.fillStyle = '#000'; ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h); }
+      else {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      }
     }
     function drawObstacles() {
       obstáculos.forEach(o => {
@@ -166,7 +171,7 @@
     function drawScore() {
       ctx.fillStyle = '#fff';
       ctx.font = '20px sans-serif';
-      ctx.fillText('Score: '+score, 10, 25);
+      ctx.fillText('Score: ' + score, 10, 25);
     }
     function drawGameOver() {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
