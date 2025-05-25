@@ -3,37 +3,31 @@
 <head>
   <meta charset="UTF-8">
   <title>Llipsia la Pingüina</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
-    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#222; }
-    canvas {
-      display:block;
-      width:100%;
-      height:100%;
-      touch-action:none;
-      -webkit-user-select:none;
-      user-select:none;
-    }
+    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #222; }
+    canvas { display: block; }
     #info {
-      position:absolute;
-      top:10px;
-      left:50%;
-      transform:translateX(-50%);
-      color:#fff;
-      font-family:sans-serif;
-      pointer-events:none;
-      user-select:none;
-      z-index:10;
+      position: absolute;
+      top: 10px;
+      width: 100%;
+      text-align: center;
+      color: #fff;
+      font: 20px sans-serif;
+      pointer-events: none;
+      user-select: none;
+      z-index: 1;
     }
   </style>
 </head>
 <body>
-  <div id="info">Cargando...</div>
+  <div id="info">Toca o haz clic para volar</div>
   <canvas id="gameCanvas"></canvas>
   <script>
-    // Ajusta canvas al tamaño de la ventana
     const canvas = document.getElementById('gameCanvas');
-    const ctx = canvas.getContext('2d');
+    const ctx    = canvas.getContext('2d');
+
+    // Ajuste responsivo del canvas
     function resize() {
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -41,57 +35,59 @@
     window.addEventListener('resize', resize);
     resize();
 
-    let W = canvas.width,
-        H = canvas.height;
+    let W = canvas.width;
+    let H = canvas.height;
 
     // Jugador
-    const llipsia = { x: 50, y: H/2, w: 40, h: 50, dy: 0, gravity: 0.5, jumpForce: -8 };
-    let obstáculos = [],
-        spawnInterval = 1500,
-        obstVel = 4,
-        últimoSpawn = 0;
-    let gameOver = false,
-        score = 0;
+    const llipsia = {
+      x: 50,
+      y: H / 2,
+      w: 40,
+      h: 50,
+      dy: 0,
+      gravity: 0.5,
+      flyPower: -8
+    };
+
+    // Obstáculos
+    let obstáculos = [];
+    const spawnInterval = 1500;
+    const obstSpeed     = 4;
+    let últimoSpawn     = 0;
+
+    let gameOver = false;
+    let score    = 0;
 
     // Carga de sprites
     const assets = {
-      llipsia: { img: new Image(), ok: false },
-      obst:    { img: new Image(), ok: false },
-      obstTop: { img: new Image(), ok: false }
+      llipsia: new Image(),
+      obst:     new Image(),
+      obstTop:  new Image()
     };
-    let loaded = 0;
-    function mark(k) {
-      return function() {
-        assets[k].ok = true;
-        if (++loaded === 3) {
-          document.getElementById('info').textContent = 'Toca o hace clic para volar';
-          resetGame();
-        }
-      };
-    }
-    assets.llipsia.img.onload = assets.llipsia.img.onerror = mark('llipsia');
-    assets.llipsia.img.src = 'assets/llipsia.png';
-    assets.obst.img.onload    = assets.obst.img.onerror    = mark('obst');
-    assets.obst.img.src        = 'assets/obstaculo.png';
-    assets.obstTop.img.onload = assets.obstTop.img.onerror = mark('obstTop');
-    assets.obstTop.img.src    = 'assets/obstaculo1.png';
+    // Opcionles: sin fallback en caso de error, usamos rectángulos
+    assets.llipsia.src = 'assets/llipsia.png';
+    assets.obst.src    = 'assets/obstaculo.png';
+    assets.obstTop.src = 'assets/obstaculo1.png';
 
-    // Impulso (vuelo / salto)
+    // Función de vuelo
     function fly() {
-      if (!gameOver) llipsia.dy = llipsia.jumpForce;
-      else resetGame();
+      if (!gameOver) {
+        llipsia.dy = llipsia.flyPower;
+      } else {
+        resetGame();
+      }
     }
 
-    // Listeners globales para touch y click
-    window.addEventListener('touchstart', e => { e.preventDefault(); fly(); }, { passive:false });
-    window.addEventListener('mousedown', fly);
-    window.addEventListener('pointerdown', fly);
-    document.addEventListener('keydown', e => { if (e.code === 'Space') fly(); });
+    // Eventos unificados de pointer (táctil y mouse)
+    document.addEventListener('pointerdown', fly);
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space') fly();
+    });
 
     // Reiniciar partida
     function resetGame() {
       obstáculos = [];
-      llipsia.y = H/2;
+      llipsia.y = canvas.height / 2;
       llipsia.dy = 0;
       últimoSpawn = performance.now() - spawnInterval;
       score = 0;
@@ -101,31 +97,50 @@
 
     // Bucle principal
     function loop(ts) {
-      if (gameOver) return drawGameOver();
-      // Actualiza dimensiones (en caso de rotate)
+      if (gameOver) {
+        drawGameOver();
+        return;
+      }
+
+      // Actualiza dimensiones por si cambió
       W = canvas.width;
       H = canvas.height;
 
-      // Física
+      // Física de vuelo
       llipsia.dy += llipsia.gravity;
-      llipsia.y += llipsia.dy;
-      if (llipsia.y + llipsia.h > H) { llipsia.y = H - llipsia.h; gameOver = true; }
-      if (llipsia.y < 0)      { llipsia.y = 0; llipsia.dy = 0; }
+      llipsia.y  += llipsia.dy;
 
-      // Spawning
-      if (ts - últimoSpawn >= spawnInterval) {
-        const w = 30 + Math.random()*30,
-              h = 30 + Math.random()*30;
+      // Colisiones con suelo y techo
+      if (llipsia.y + llipsia.h > H) {
+        llipsia.y = H - llipsia.h;
+        gameOver = true;
+      }
+      if (llipsia.y < 0) {
+        llipsia.y = 0;
+        llipsia.dy = 0;
+      }
+
+      // Generar obstáculos
+      if (ts - últimoSpawn > spawnInterval) {
+        const w = 30 + Math.random() * 30;
+        const h = 30 + Math.random() * 30;
+        // Piso
         obstáculos.push({ x: W, y: H - h, w, h, roof: false });
-        obstáculos.push({ x: W, y: 0,     w, h, roof: true  });
+        // Techo
+        obstáculos.push({ x: W, y: 0,    w, h, roof: true  });
         últimoSpawn = ts;
       }
 
-      // Mover obstáculos y colisiones
+      // Mover obstáculos y detectar colisión
       for (let i = obstáculos.length - 1; i >= 0; i--) {
         const o = obstáculos[i];
-        o.x -= obstVel;
-        if ( llipsia.x < o.x + o.w && llipsia.x + llipsia.w > o.x && llipsia.y < o.y + o.h && llipsia.y + llipsia.h > o.y ) {
+        o.x -= obstSpeed;
+        if (
+          llipsia.x < o.x + o.w &&
+          llipsia.x + llipsia.w > o.x &&
+          llipsia.y < o.y + o.h &&
+          llipsia.y + llipsia.h > o.y
+        ) {
           gameOver = true;
         }
         if (o.x + o.w < 0) {
@@ -134,8 +149,8 @@
         }
       }
 
-      // Dibuja todo
-      ctx.clearRect(0,0,W,H);
+      // Dibujar
+      ctx.clearRect(0, 0, W, H);
       drawBackground();
       drawLlipsia();
       drawObstacles();
@@ -143,19 +158,20 @@
       requestAnimationFrame(loop);
     }
 
-    // Funciones de dibujo
+    // Dibujadores
     function drawBackground() {
       ctx.save();
       ctx.globalAlpha = 0.1;
-      ctx.fillStyle = '#fff';
-      ctx.font = '100px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('Llipsia', W/2, H/2);
+      ctx.fillStyle   = '#fff';
+      ctx.font        = '100px sans-serif';
+      ctx.textAlign   = 'center';
+      ctx.fillText('Llipsia', W / 2, H / 2);
       ctx.restore();
     }
     function drawLlipsia() {
-      if (assets.llipsia.ok) ctx.drawImage(assets.llipsia.img, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
-      else {
+      if (assets.llipsia.complete) {
+        ctx.drawImage(assets.llipsia, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      } else {
         ctx.fillStyle = '#000';
         ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h);
       }
@@ -165,23 +181,25 @@
         ctx.fillStyle = '#c33';
         ctx.fillRect(o.x, o.y, o.w, o.h);
         const spr = o.roof ? assets.obstTop : assets.obst;
-        if (spr.ok) ctx.drawImage(spr.img, o.x, o.y, o.w, o.h);
+        if (spr.complete) {
+          ctx.drawImage(spr, o.x, o.y, o.w, o.h);
+        }
       });
     }
     function drawScore() {
       ctx.fillStyle = '#fff';
-      ctx.font = '20px sans-serif';
+      ctx.font      = '20px sans-serif';
       ctx.fillText('Score: ' + score, 10, 25);
     }
     function drawGameOver() {
       ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(0,0,W,H);
+      ctx.fillRect(0, 0, W, H);
       ctx.fillStyle = '#fff';
-      ctx.font = '40px sans-serif';
+      ctx.font      = '40px sans-serif';
       ctx.textAlign = 'center';
-      ctx.fillText('¡Game Over!', W/2, H/2 - 20);
-      ctx.font = '20px sans-serif';
-      ctx.fillText('Toca o haz clic para reiniciar', W/2, H/2 + 10);
+      ctx.fillText('¡Game Over!', W / 2, H / 2 - 20);
+      ctx.font      = '20px sans-serif';
+      ctx.fillText('Toca o haz clic para reiniciar', W / 2, H / 2 + 10);
     }
   </script>
 </body>
