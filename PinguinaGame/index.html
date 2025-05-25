@@ -3,31 +3,24 @@
 <head>
   <meta charset="UTF-8">
   <title>Llipsia la Pingüina</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
   <style>
-    html, body { margin: 0; padding: 0; width: 100%; height: 100%; overflow: hidden; background: #222; }
-    canvas { display: block; }
+    html, body { margin:0; padding:0; width:100%; height:100%; overflow:hidden; background:#222; }
+    canvas { display:block; width:100%; height:100%; }
     #info {
-      position: absolute;
-      top: 10px;
-      width: 100%;
-      text-align: center;
-      color: #fff;
-      font: 20px sans-serif;
-      pointer-events: none;
-      user-select: none;
-      z-index: 1;
+      position:absolute; top:10px; left:50%; transform:translateX(-50%);
+      color:#fff; font-family:sans-serif; font-size:18px;
+      pointer-events:none;
     }
   </style>
 </head>
 <body>
-  <div id="info">Toca o haz clic para volar</div>
+  <div id="info">Toca para comenzar</div>
   <canvas id="gameCanvas"></canvas>
   <script>
     const canvas = document.getElementById('gameCanvas');
-    const ctx    = canvas.getContext('2d');
+    const ctx = canvas.getContext('2d');
 
-    // Ajuste responsivo del canvas
     function resize() {
       canvas.width  = window.innerWidth;
       canvas.height = window.innerHeight;
@@ -35,171 +28,104 @@
     window.addEventListener('resize', resize);
     resize();
 
-    let W = canvas.width;
-    let H = canvas.height;
+    let W = canvas.width, H = canvas.height;
+    let gameStarted = false;
 
-    // Jugador
-    const llipsia = {
-      x: 50,
-      y: H / 2,
-      w: 40,
-      h: 50,
-      dy: 0,
-      gravity: 0.5,
-      flyPower: -8
+    const llipsia = { x:50, y:H/2, w:40, h:50, dy:0, gravity:0.5, flyPower:-8 };
+    let obstáculos = [], spawnInterval=1500, obstVel=4, últimoSpawn=0;
+    let gameOver=false, score=0;
+
+    // Sprites (optional)
+    const assets={
+      llipsia: new Image(), obst: new Image(), obstTop: new Image()
     };
-
-    // Obstáculos
-    let obstáculos = [];
-    const spawnInterval = 1500;
-    const obstSpeed     = 4;
-    let últimoSpawn     = 0;
-
-    let gameOver = false;
-    let score    = 0;
-
-    // Carga de sprites
-    const assets = {
-      llipsia: new Image(),
-      obst:     new Image(),
-      obstTop:  new Image()
-    };
-    // Opcionles: sin fallback en caso de error, usamos rectángulos
     assets.llipsia.src = 'assets/llipsia.png';
     assets.obst.src    = 'assets/obstaculo.png';
     assets.obstTop.src = 'assets/obstaculo1.png';
 
-    // Función de vuelo
     function fly() {
-      if (!gameOver) {
+      if (!gameStarted) {
+        gameStarted = true;
+        document.getElementById('info').textContent = '¡Vuela! Toca para impulsar';
+        resetGame();
+      } else if (!gameOver) {
         llipsia.dy = llipsia.flyPower;
       } else {
         resetGame();
+        gameOver = false;
+        document.getElementById('info').textContent = '¡Vuela! Toca para impulsar';
       }
     }
 
-    // Eventos unificados de pointer (táctil y mouse)
-    document.addEventListener('pointerdown', fly);
-    document.addEventListener('keydown', e => {
-      if (e.code === 'Space') fly();
-    });
+    document.addEventListener('pointerdown', e => { e.preventDefault(); fly(); }, { passive:false });
+    document.addEventListener('keydown', e => { if (e.code==='Space') fly(); });
 
-    // Reiniciar partida
     function resetGame() {
       obstáculos = [];
-      llipsia.y = canvas.height / 2;
+      llipsia.y = H/2;
       llipsia.dy = 0;
       últimoSpawn = performance.now() - spawnInterval;
       score = 0;
-      gameOver = false;
       requestAnimationFrame(loop);
     }
 
-    // Bucle principal
     function loop(ts) {
-      if (gameOver) {
-        drawGameOver();
-        return;
-      }
-
-      // Actualiza dimensiones por si cambió
-      W = canvas.width;
-      H = canvas.height;
-
-      // Física de vuelo
+      if (gameOver) { drawGameOver(); return; }
+      // Update
       llipsia.dy += llipsia.gravity;
-      llipsia.y  += llipsia.dy;
+      llipsia.y += llipsia.dy;
 
-      // Colisiones con suelo y techo
-      if (llipsia.y + llipsia.h > H) {
-        llipsia.y = H - llipsia.h;
-        gameOver = true;
-      }
-      if (llipsia.y < 0) {
-        llipsia.y = 0;
-        llipsia.dy = 0;
-      }
+      if (llipsia.y + llipsia.h > H) { llipsia.y = H - llipsia.h; gameOver=true; }
+      if (llipsia.y < 0)           { llipsia.y = 0; llipsia.dy=0; }
 
-      // Generar obstáculos
-      if (ts - últimoSpawn > spawnInterval) {
-        const w = 30 + Math.random() * 30;
-        const h = 30 + Math.random() * 30;
-        // Piso
-        obstáculos.push({ x: W, y: H - h, w, h, roof: false });
-        // Techo
-        obstáculos.push({ x: W, y: 0,    w, h, roof: true  });
+      if (ts - últimoSpawn >= spawnInterval) {
+        const w = 30 + Math.random()*30, h = 30 + Math.random()*30;
+        obstáculos.push({ x:W, y:H-h, w, h, roof:false });
+        obstáculos.push({ x:W, y:0,    w, h, roof:true  });
         últimoSpawn = ts;
       }
 
-      // Mover obstáculos y detectar colisión
-      for (let i = obstáculos.length - 1; i >= 0; i--) {
-        const o = obstáculos[i];
-        o.x -= obstSpeed;
-        if (
-          llipsia.x < o.x + o.w &&
-          llipsia.x + llipsia.w > o.x &&
-          llipsia.y < o.y + o.h &&
-          llipsia.y + llipsia.h > o.y
-        ) {
-          gameOver = true;
+      obstáculos = obstáculos.filter(o => {
+        o.x -= obstVel;
+        if (llipsia.x < o.x+o.w && llipsia.x+llipsia.w>o.x && llipsia.y<o.y+o.h && llipsia.y+llipsia.h>o.y) {
+          gameOver=true;
         }
-        if (o.x + o.w < 0) {
-          obstáculos.splice(i, 1);
-          if (!gameOver) score++;
-        }
-      }
+        if (o.x + o.w < 0) score++;
+        return o.x + o.w >= 0;
+      });
 
-      // Dibujar
-      ctx.clearRect(0, 0, W, H);
-      drawBackground();
-      drawLlipsia();
-      drawObstacles();
-      drawScore();
+      // Draw
+      W = canvas.width; H = canvas.height;
+      ctx.clearRect(0,0,W,H);
+      drawBackground(); drawLlipsia(); drawObstacles(); drawScore();
       requestAnimationFrame(loop);
     }
 
-    // Dibujadores
     function drawBackground() {
-      ctx.save();
-      ctx.globalAlpha = 0.1;
-      ctx.fillStyle   = '#fff';
-      ctx.font        = '100px sans-serif';
-      ctx.textAlign   = 'center';
-      ctx.fillText('Llipsia', W / 2, H / 2);
-      ctx.restore();
+      ctx.save(); ctx.globalAlpha=0.1;
+      ctx.fillStyle='#fff'; ctx.font='100px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('Llipsia', W/2, H/2); ctx.restore();
     }
     function drawLlipsia() {
-      if (assets.llipsia.complete) {
-        ctx.drawImage(assets.llipsia, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
-      } else {
-        ctx.fillStyle = '#000';
-        ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h);
-      }
+      if (assets.llipsia.complete) ctx.drawImage(assets.llipsia, llipsia.x, llipsia.y, llipsia.w, llipsia.h);
+      else { ctx.fillStyle='#000'; ctx.fillRect(llipsia.x, llipsia.y, llipsia.w, llipsia.h); }
     }
     function drawObstacles() {
-      obstáculos.forEach(o => {
-        ctx.fillStyle = '#c33';
-        ctx.fillRect(o.x, o.y, o.w, o.h);
-        const spr = o.roof ? assets.obstTop : assets.obst;
-        if (spr.complete) {
-          ctx.drawImage(spr, o.x, o.y, o.w, o.h);
-        }
+      obstáculos.forEach(o=>{
+        ctx.fillStyle='#c33'; ctx.fillRect(o.x,o.y,o.w,o.h);
+        const spr=o.roof?assets.obstTop:assets.obst;
+        if (spr.complete) ctx.drawImage(spr, o.x,o.y,o.w,o.h);
       });
     }
     function drawScore() {
-      ctx.fillStyle = '#fff';
-      ctx.font      = '20px sans-serif';
-      ctx.fillText('Score: ' + score, 10, 25);
+      ctx.fillStyle='#fff'; ctx.font='20px sans-serif';
+      ctx.fillText('Score: '+score,10,25);
     }
     function drawGameOver() {
-      ctx.fillStyle = 'rgba(0,0,0,0.5)';
-      ctx.fillRect(0, 0, W, H);
-      ctx.fillStyle = '#fff';
-      ctx.font      = '40px sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('¡Game Over!', W / 2, H / 2 - 20);
-      ctx.font      = '20px sans-serif';
-      ctx.fillText('Toca o haz clic para reiniciar', W / 2, H / 2 + 10);
+      ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(0,0,W,H);
+      ctx.fillStyle='#fff'; ctx.font='40px sans-serif'; ctx.textAlign='center';
+      ctx.fillText('¡Game Over!',W/2,H/2-20);
+      ctx.font='20px sans-serif'; ctx.fillText('Toca para reiniciar',W/2,H/2+10);
     }
   </script>
 </body>
